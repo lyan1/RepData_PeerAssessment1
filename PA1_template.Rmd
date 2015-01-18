@@ -1,25 +1,115 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
 output: 
-  html_document:
-    keep_md: true
+html_document:
+keep_md: true
 ---
 
+This is a report genereated by the "knitr" package for Reproducible Research: Peer Assessment Project 1. 
+
+Before any analysis can be done, we need to load some R packages.
+
+```{r}
+# Load some R packages
+library(plyr)
+library(ggplot2)
+```
 
 ## Loading and preprocessing the data
 
+In this step, the data is loaded and preprocessed. The data file should be downloaded and extracted into the R work directory already.
 
+```{r}
+# Read the data
+activityData <- read.csv("data/activity.csv", stringsAsFactors=FALSE)
+# Convert "date" to Date format
+activityData$date <- as.Date(activityData$date)
+```
 
 ## What is mean total number of steps taken per day?
 
+We first create a histogram for the total number of steps taken each day:
 
+```{r}
+stepsByDay <- ddply(activityData, "date", summarize, sum = sum(steps, na.rm=TRUE))
+ggplot(stepsByDay, aes(sum)) + geom_histogram(binwidth=1000) + ggtitle("Total steps taken per day")
+```
+
+The mean total number of steps per day is:
+```{r}
+mean(stepsByDay$sum)
+```
+
+The median total number of steps per day is:
+```{r}
+median(stepsByDay$sum)
+remove(stepsByDay)
+```
 
 ## What is the average daily activity pattern?
 
+We create a time series plot with x being the 5-minute interval and y being the average number of steps taken, averaged across all days.
 
+```{r}
+stepsByInt <- ddply(activityData, "interval", summarize, meanSteps = mean(steps, na.rm=TRUE))
+ggplot(stepsByInt, aes(interval,meanSteps)) + 
+  geom_line() + 
+  geom_text(aes(label=interval),size=2,hjust=0, vjust=1) +
+  ggtitle("Average steps taken at each time interval") +
+  labs(x = "5-Minute Interval", y="Number of Steps")
+```
+
+From this plot, we can conclude that the interval 835 contains the maximum number of steps.
 
 ## Imputing missing values
 
+First, we calculate the total number of missing values in the dataset:
 
+```{r}
+sum(is.na(activityData$step))
+```
+
+Then, we create a new dataset that is equal to the original dataset but with the missing data filled in with the mean of the same time interval.
+
+```{r}
+newData <- ddply(activityData,"interval", transform, steps = replace(steps, is.na(steps), mean(steps, na.rm = TRUE)))
+newData <- newData[order(newData$date),]
+```
+
+At last, we make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.
+
+```{r}
+stepsByDay <- ddply(newData, "date", summarize, sum = sum(steps, na.rm=TRUE))
+ggplot(stepsByDay, aes(sum)) + geom_histogram(binwidth=1000) + ggtitle("Total steps taken per day (with filled-in values for NA)")
+```
+
+The mean total number of steps per day is:
+```{r}
+mean(stepsByDay$sum)
+```
+
+The median total number of steps per day is:
+```{r}
+median(stepsByDay$sum)
+#remove(stepsByDay)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+First, we create a new factor variable "dayOfWeek": the value will be "weekday" for weekdays and "weekend" for Saturdays and Sundays.
+
+```{r}
+newData$dayOfWeek <- sapply(newData[,"date"],
+                            function(x) { if (weekdays(x) %in% c("Saturday","Sunday")) {"weekend"} else {"weekday"} })
+```
+
+Then we can make one time series plot for each value:
+```{r}
+ggplot(ddply(newData, c("interval","dayOfWeek"), summarize, meanSteps = mean(steps, na.rm=TRUE)), aes(interval,meanSteps)) + 
+  geom_line() + 
+  facet_wrap(~dayOfWeek, ncol=1) +
+  ggtitle("Average steps taken at each time interval - weekdays vs. weekends") +
+  labs(x = "5-Minute Interval", y="Number of Steps")
+```
+
+From the plot above, it can be clearly seen that the patterns are different for weekdays and weekends. For weekdays, there is a peak in the early morning, whereas the steps are more evenly distributed through the deay for weekends.
